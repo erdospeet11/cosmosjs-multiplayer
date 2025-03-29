@@ -2,7 +2,7 @@ class Game {
     constructor() {
         this.initialized = false;
         this.playerName = '';
-        
+        this.chatOpen = true;
         this.setupLoginUI();
     }
     
@@ -11,7 +11,6 @@ class Game {
         const playerNameInput = document.getElementById('player-name');
         
         playerNameInput.focus();
-        
         playerNameInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 this.startGame();
@@ -23,6 +22,74 @@ class Game {
         });
     }
     
+    setupChatUI() {
+        const chatInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const chatContainer = document.getElementById('chat-container');
+        const chatToggle = document.getElementById('chat-toggle');
+        
+        sendButton.addEventListener('click', () => {
+            this.sendChatMessage();
+        });
+        
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.sendChatMessage();
+            }
+        });
+        
+        chatToggle.addEventListener('click', () => {
+            this.chatOpen = !this.chatOpen;
+            if (this.chatOpen) {
+                chatContainer.style.display = 'flex';
+                chatToggle.style.display = 'none';
+            } else {
+                chatContainer.style.display = 'none';
+                chatToggle.style.display = 'block';
+            }
+        });
+        
+        chatContainer.style.display = 'flex';
+        chatToggle.style.display = 'none';
+    }
+    
+    sendChatMessage() {
+        const chatInput = document.getElementById('message-input');
+        const message = chatInput.value.trim();
+        
+        if (message && this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({
+                type: 'chat',
+                content: message
+            }));
+            
+            chatInput.value = '';
+        }
+        
+        chatInput.focus();
+    }
+    
+    addChatMessage(message) {
+        const chatMessages = document.getElementById('chat-messages');
+        
+        const messageElement = document.createElement('div');
+        messageElement.className = 'chat-message';
+        
+        const senderElement = document.createElement('span');
+        senderElement.className = 'sender';
+        senderElement.textContent = message.sender + ': ';
+        
+        const contentElement = document.createElement('span');
+        contentElement.className = 'content';
+        contentElement.textContent = message.content;
+        
+        messageElement.appendChild(senderElement);
+        messageElement.appendChild(contentElement);
+        chatMessages.appendChild(messageElement);
+        
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    
     startGame() {
         const playerNameInput = document.getElementById('player-name');
         this.playerName = playerNameInput.value.trim() || 'Player';
@@ -31,6 +98,8 @@ class Game {
         loginOverlay.style.display = 'none';
         
         this.initializeGame();
+        
+        this.setupChatUI();
         
         this.setupWebSocket();
     }
@@ -64,11 +133,18 @@ class Game {
         this.nameTags = new Map();
 
         this.moveSpeed = 0.1;
+        this.gravity = 0.01;
+        this.jumpForce = 0.2;
+        this.isJumping = false;
+        this.jumpVelocity = 0;
+        this.groundLevel = 0.5;
+        
         this.keys = {
             w: false,
             a: false,
             s: false,
-            d: false
+            d: false,
+            ' ': false
         };
 
         window.addEventListener('keydown', this.onKeyDown.bind(this));
@@ -82,13 +158,10 @@ class Game {
     }
 
     setupWebSocket() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}`;
-        this.ws = new WebSocket(wsUrl);
+        this.ws = new WebSocket('ws://localhost:8000');
 
         this.ws.onopen = () => {
             console.log("WebSocket connection established");
-
             this.ws.send(JSON.stringify({
                 type: 'join',
                 name: this.playerName
@@ -123,6 +196,12 @@ class Game {
                         this.createOtherPlayer(id, data);
                     }
                 }
+                
+                if (message.chatHistory && message.chatHistory.length > 0) {
+                    message.chatHistory.forEach(msg => {
+                        this.addChatMessage(msg);
+                    });
+                }
                 break;
                 
             case 'player_joined':
@@ -143,6 +222,11 @@ class Game {
                 
             case 'positions':
                 this.updateOtherPlayers(message.players);
+                break;
+                
+            case 'chat_message':
+                console.log("Chat message received:", message.message);
+                this.addChatMessage(message.message);
                 break;
         }
     }
@@ -281,6 +365,22 @@ class Game {
         if (this.keys.d) moveVector.x += this.moveSpeed;
 
         this.localPlayer.position.add(moveVector);
+        
+        if (this.keys[' '] && !this.isJumping && this.localPlayer.position.y <= this.groundLevel + 0.01) {
+            this.isJumping = true;
+            this.jumpVelocity = this.jumpForce;
+        }
+        
+        if (this.isJumping) {
+            this.localPlayer.position.y += this.jumpVelocity;
+            this.jumpVelocity -= this.gravity;
+            
+            if (this.localPlayer.position.y <= this.groundLevel) {
+                this.localPlayer.position.y = this.groundLevel;
+                this.isJumping = false;
+                this.jumpVelocity = 0;
+            }
+        }
 
         this.camera.position.x = this.localPlayer.position.x;
         this.camera.position.z = this.localPlayer.position.z + 10;

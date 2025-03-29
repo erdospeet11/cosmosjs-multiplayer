@@ -14,6 +14,8 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 const connectedClients = new Map();
 const playerData = new Map();
+const chatHistory = [];
+const MAX_CHAT_HISTORY = 50;
 
 wss.on('connection', (ws) => {
     const clientId = Math.random().toString(36).substring(7);
@@ -35,16 +37,39 @@ wss.on('connection', (ws) => {
                 ws.send(JSON.stringify({
                     type: 'init',
                     id: clientId,
-                    players: Object.fromEntries(Array.from(playerData.entries()).map(([id, data]) => [id, data]))
+                    players: Object.fromEntries(Array.from(playerData.entries()).map(([id, data]) => [id, data])),
+                    chatHistory: chatHistory
                 }));
                 
                 broadcastPlayerJoined(clientId);
+                
+                const joinMessage = {
+                    sender: 'System',
+                    content: `${playerName} has joined the game`,
+                    timestamp: Date.now()
+                };
+                addChatMessage(joinMessage);
+                broadcastChatMessage(joinMessage);
             }
             else if (data.type === 'position') {
                 if (playerData.has(clientId)) {
                     const player = playerData.get(clientId);
                     player.position = data.position;
                     broadcastPositions();
+                }
+            }
+            else if (data.type === 'chat') {
+                if (playerData.has(clientId) && data.content && data.content.trim()) {
+                    const playerName = playerData.get(clientId).name;
+                    const chatMessage = {
+                        sender: playerName,
+                        content: data.content.trim(),
+                        timestamp: Date.now(),
+                        playerId: clientId
+                    };
+                    
+                    addChatMessage(chatMessage);
+                    broadcastChatMessage(chatMessage);
                 }
             }
         } catch (error) {
@@ -54,9 +79,28 @@ wss.on('connection', (ws) => {
 
     ws.on('close', () => {
         console.log(`Client disconnected: ${clientId}`);
+        
+        if (playerData.has(clientId)) {
+            const playerName = playerData.get(clientId).name;
+            const leaveMessage = {
+                sender: 'System',
+                content: `${playerName} has left the game`,
+                timestamp: Date.now()
+            };
+            addChatMessage(leaveMessage);
+            broadcastChatMessage(leaveMessage);
+        }
+        
         handleDisconnect(clientId);
     });
 });
+
+function addChatMessage(message) {
+    chatHistory.push(message);
+    if (chatHistory.length > MAX_CHAT_HISTORY) {
+        chatHistory.shift();
+    }
+}
 
 function handleDisconnect(clientId) {
     connectedClients.delete(clientId);
@@ -89,6 +133,14 @@ function broadcastPlayerLeft(clientId) {
     const message = {
         type: 'player_left',
         id: clientId
+    };
+    broadcast(message);
+}
+
+function broadcastChatMessage(chatMessage) {
+    const message = {
+        type: 'chat_message',
+        message: chatMessage
     };
     broadcast(message);
 }
