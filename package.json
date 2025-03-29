@@ -1,0 +1,14 @@
+{
+  "name": "threejs-multiplayer-game",
+  "version": "1.0.0",
+  "description": "A Three.js multiplayer browser game",
+  "main": "server/main.js",
+  "scripts": {
+    "start": "node server/main.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.16.0",
+    "cors": "^2.8.5"
+  }
+} 
