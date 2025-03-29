@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "A Three.js multiplayer browser game",
   "main": "server/main.js",
+  "engines": {
+    "node": "16.x"
+  },
   "scripts": {
     "start": "node server/main.js"
   },
@@ -11,4 +14,4 @@
     "ws": "^8.16.0",
     "cors": "^2.8.5"
   }
-} 
+}

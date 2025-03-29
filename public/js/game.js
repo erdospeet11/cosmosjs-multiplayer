@@ -82,7 +82,9 @@ class Game {
     }
 
     setupWebSocket() {
-        this.ws = new WebSocket('ws://localhost:8000');
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}`;
+        this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
             console.log("WebSocket connection established");
